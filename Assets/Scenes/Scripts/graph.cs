@@ -7,7 +7,7 @@ using TMPro;
 namespace Magikus {
     public class graph : MonoBehaviour
     {
-        public enum GRAPHS { Ft, Xt, X }
+        public enum GRAPHS { Trayectorias, Curva, Fases }
 
         public Material material;
         public float lineWidth = 0.1f;
@@ -15,6 +15,7 @@ namespace Magikus {
         public Transform asintotasContainer;
 
         public TMP_InputField inputField;
+        public TMP_Dropdown dropdownField;
 
         public smartSlider aSlider;
         public smartSlider bSlider;
@@ -45,7 +46,7 @@ namespace Magikus {
         private Vector2 mouseOffset;
         private Vector2 mousePos;
 
-        private GRAPHS currentGraph = GRAPHS.Ft;
+        private GRAPHS currentGraph = GRAPHS.Curva;
         private Vector2 bounds;
         private Vector2 offset;
         private Vector2 scale;
@@ -62,7 +63,6 @@ namespace Magikus {
             offset = new Vector2(0, 0);
             scale = new Vector2(1, 1);
             asintotaLabel.SetActive(false);
-            //ecuacionActual = new Polinomica(a, b, c, d);
             ecuacionActual = new Ecuacion(a, b, c, d);
             RePlot();
         }
@@ -73,11 +73,19 @@ namespace Magikus {
             MouseScale();
         }
 
-        public void PlotFvsT() { currentGraph = GRAPHS.Ft; RePlot(); }
-        public void PlotXvsT() { currentGraph = GRAPHS.Xt; RePlot(); }
-        public void PlotX() { currentGraph = GRAPHS.X; RePlot(); }
+        public void PlotFvsT() { currentGraph = GRAPHS.Trayectorias; RePlot(); }
+        public void PlotXvsT() { currentGraph = GRAPHS.Curva; RePlot(); }
+        public void PlotX() { currentGraph = GRAPHS.Fases; RePlot(); }
+        public void SetPresetExpresion(int index) 
+        {
+            if (dropdownField == null) { return; }
+            if (index == 0) { return; }
+            inputField.text = dropdownField.options[index].text;
+            SetEpresion();
+        }
         public void SetEpresion()
         {
+            if (inputField == null) { return; }
             expresion = inputField.text;
             ecuacionActual.SetExpression(expresion);
             RePlot();
@@ -171,9 +179,9 @@ namespace Magikus {
             string yLabel = "y";
             switch (currentGraph)
             {
-                case GRAPHS.Ft: xLabel = "t"; yLabel = "F(x)"; break;
-                case GRAPHS.Xt: xLabel = "t"; yLabel = "X(t)"; ; break;
-                case GRAPHS.X: xLabel = "X"; yLabel = "0"; ; break;
+                case GRAPHS.Curva: xLabel = "x"; yLabel = "f(x)"; ; break;
+                case GRAPHS.Trayectorias: xLabel = "t"; yLabel = "X(t)"; break;
+                case GRAPHS.Fases: xLabel = "X"; yLabel = "0"; ; break;
             }
 
             int n = 40;
@@ -187,7 +195,7 @@ namespace Magikus {
             for (float i = -n; i <= n; i += factor)
             {
                 if (i == 0) { continue; }
-                if (currentGraph == GRAPHS.X) { continue; }
+                if (currentGraph == GRAPHS.Fases) { continue; }
                 PlotLine_Horizontal(i, Color.grey, lineWidth / 2);
             }
 
@@ -200,9 +208,9 @@ namespace Magikus {
             {
                 switch (currentGraph)
                 {
-                    case GRAPHS.Ft: PlotLine_Horizontal(raices[i], 2.5f - (i * 1f), "", Color.blue); break;
-                    case GRAPHS.Xt: PlotLine_Vertical(raices[i], -2.25f - (i * 0.5f), "", Color.blue); break;
-                    case GRAPHS.X: PlotLine_Vertical(raices[i], -2.25f - (i * 0.5f), "", Color.blue); break;
+                    case GRAPHS.Trayectorias: PlotLine_Horizontal(raices[i], 2.5f - (i * 1f), "", Color.blue); break;
+                    case GRAPHS.Curva: PlotLine_Vertical(raices[i], -2.25f - (i * 0.5f), "", Color.blue); break;
+                    case GRAPHS.Fases: PlotLine_Vertical(raices[i], -2.25f - (i * 0.5f), "", Color.blue); break;
                 }
             }
         }
@@ -210,7 +218,7 @@ namespace Magikus {
         {
             switch (currentGraph)
             {
-                case GRAPHS.Ft:
+                case GRAPHS.Trayectorias:
                     {
                         int width = 8;
                         float h = 0.05f * (21 - trajectories);
@@ -227,8 +235,8 @@ namespace Magikus {
                         }
                         break;
                     }
-                case GRAPHS.Xt: PlotCurve(FitToGraph(CalculateCurve(steps, function))).SetColor(Color.green); break;
-                case GRAPHS.X:
+                case GRAPHS.Curva: PlotCurve(FitToGraph(CalculateCurve(steps, function))).SetColor(Color.green); break;
+                case GRAPHS.Fases:
                     {
                         Color startColor;
                         Color endColor;
@@ -445,23 +453,24 @@ namespace Magikus {
             public float b;
             public float c;
             public float d;
-            Dictionary<char, float> dictionary;
+            Dictionary<char, float> variables;
+            Dictionary<char, float> constants;
 
             public Ecuacion(float a, float b, float c, float d, string ecuacion = "")
             {
                 this.ecuacion = ecuacion;
-                dictionary = new Dictionary<char, float>();
-                dictionary.Add('a', a);
-                dictionary.Add('b', b);
-                dictionary.Add('c', c);
-                dictionary.Add('d', d);
+                variables = new Dictionary<char, float>();
+                variables.Add('a', a);
+                variables.Add('b', b);
+                variables.Add('c', c);
+                variables.Add('d', d);
                 SetParametros(a, b, c, d);
                 SetExpression(ecuacion);
             }
             public virtual float Evaluar(float x)
             {
-                if (!dictionary.ContainsKey('x')) { dictionary.Add('x', x); } else { dictionary['x'] = x; }
-                return MathExp.PostfixEvaluate(prefix, dictionary);
+                if (!variables.ContainsKey('x')) { variables.Add('x', x); } else { variables['x'] = x; }
+                return MathExp.PostfixEvaluate(prefix, variables, constants);
             }
 
             public virtual List<float> CalcularRaices() { return new List<float>(); }
@@ -510,7 +519,7 @@ namespace Magikus {
                 if (expresion != "")
                 {
                     ecuacion = expresion;
-                    prefix = MathExp.InfixToPostfix(expresion);
+                    prefix = MathExp.InfixToPostfix(expresion, ref constants);
                 }
             }
             public virtual void SetParametros(float a, float b, float c, float d)
@@ -519,10 +528,10 @@ namespace Magikus {
                 this.b = b;
                 this.c = c;
                 this.d = d;
-                dictionary['a'] = a;
-                dictionary['b'] = b;
-                dictionary['c'] = c;
-                dictionary['d'] = d;
+                variables['a'] = a;
+                variables['b'] = b;
+                variables['c'] = c;
+                variables['d'] = d;
             }
             public virtual string ToLabel()
             {
@@ -587,9 +596,9 @@ namespace Magikus {
         }
     }
 
-    public static class MathExp // d*x*x*x+c*x*x+b*x+a
+    public static class MathExp
     {
-        public static float PostfixEvaluate(string exp, Dictionary<char, float> dictionary)
+        public static float PostfixEvaluate(string exp, Dictionary<char, float> variables, Dictionary<char, float> constants)
         {
             if (exp == "") { return float.NaN; }
             if (exp == "Invalid Expresion") { return float.NaN; }
@@ -599,59 +608,23 @@ namespace Magikus {
             for (int i = 0; i < exp.Length; i++)
             {
                 if (!char.IsLetterOrDigit(exp[i])) { EvaluateOperation(exp[i], values); }
-                else { values.Push(dictionary[exp[i]]); }
+                else if (variables.ContainsKey(exp[i])) { values.Push(variables[exp[i]]); }
+                else { values.Push(constants[exp[i]]); }
             }
 
             return values.Pop();
         }
-        public static float InfixEvaluate(string exp, Dictionary<char, float> dictionary)
+        public static float InfixEvaluate(string exp, Dictionary<char, float> variables) 
         {
-            if (exp == "") { return float.NaN; }
-
-            Stack<float> values = new Stack<float>();
-
-            //MonoBehaviour.print(exp);
-
-            exp = InfixToPostfix(exp);
-            if (exp == "Invalid Expresion") { return float.NaN; }
-
-            //MonoBehaviour.print(exp);
-
-            for (int i = 0; i < exp.Length; i++)
-            {
-                if (!char.IsLetterOrDigit(exp[i])) { EvaluateOperation(exp[i], values); }
-                else { values.Push(dictionary[exp[i]]); }
-            }
-
-            return values.Pop();
+            Dictionary<char, float> constants = new Dictionary<char, float>();
+            exp = InfixToPostfix(exp, ref constants);
+            return PostfixEvaluate(exp, variables, constants);
         }
-        public static float Evaluate(string exp)
+        public static float Evaluate(string exp, Dictionary<char, float> variables)
         {
-            if (exp == "") { return float.NaN; }
-            
-            Dictionary<char,float> dictionary = new Dictionary<char, float>();
-            Stack<float> values = new Stack<float>();
-
-            //MonoBehaviour.print(exp);
-
-            exp = ExtractNumbers(exp, dictionary);
-            if(exp == "Too Many Arguments!") { return float.NaN; }
-
-            //MonoBehaviour.print(exp);
-            //MonoBehaviour.print(dictionary.Count);
-
-            exp = InfixToPostfix(exp);
-            if (exp == "Invalid Expresion") { return float.NaN; }
-
-            //MonoBehaviour.print(exp);
-
-            for (int i = 0; i < exp.Length; i++) 
-            {
-                if (!char.IsLetterOrDigit(exp[i])) { EvaluateOperation(exp[i], values); } 
-                else { values.Push(dictionary[exp[i]]); }
-            }
-
-            return values.Pop();
+            Dictionary<char,float> constants = new Dictionary<char, float>();
+            exp = InfixToPostfix(exp, ref constants);
+            return PostfixEvaluate(exp, variables, constants);
         }
         public static string ReplaceParameter(string exp, string parameter, float value) 
         {
@@ -716,24 +689,26 @@ namespace Magikus {
                 case '|': values.Push(-values.Pop()); return;
             }
         }
-        public static string ExtractNumbers(string exp, Dictionary<char, float> dictionary)
+        public static string ExtractConstants(string exp, ref Dictionary<char, float> constants)
         {
             string result = "";
             string number = "";
-            string indexes = "0123456789abcdefghijklmnopqrstupvwxyz";
+            string indexes = "0123456789¸È‚‰‡ÂÍÎËÔÓÏƒ≈…ÙˆÚ˚˘ˇ÷‹·ÌÛ˙";
+
+            constants = new Dictionary<char, float>();
 
             for (int i = 0; i < exp.Length; ++i)
             {
-                if (dictionary.Count > indexes.Length) { return "Too Many Arguments!"; }
+                if (constants.Count > indexes.Length) { return "Too Many Arguments!"; }
                 char c = exp[i];
 
-                if (char.IsDigit(c) || c == '.' || c=='e') { number += c; } // If the scanned character is an operand, add it to output.
+                if (char.IsDigit(c) || c == '.') { number += c; }
                 else
                 {
                     if (number != "")
                     {
-                        result += indexes[dictionary.Count];
-                        dictionary.Add(indexes[dictionary.Count], float.Parse(number));
+                        result += indexes[constants.Count];
+                        constants.Add(indexes[constants.Count], float.Parse(number));
                         number = "";
                     }
                     result += c;
@@ -741,18 +716,19 @@ namespace Magikus {
             }
             if (number != "")
             {
-                result += indexes[dictionary.Count];
-                dictionary.Add(indexes[dictionary.Count], float.Parse(number));
+                result += indexes[constants.Count];
+                constants.Add(indexes[constants.Count], float.Parse(number));
             }
 
             return result;
         }
-        public static string InfixToPostfix(string exp)
+        public static string InfixToPostfix(string exp, ref Dictionary<char, float> constants)
         {
             string result = "";
             Stack<char> stack = new Stack<char>();
 
             exp = PrepareExpression(exp);
+            exp = ExtractConstants(exp, ref constants);
 
             for (int i = 0; i < exp.Length; ++i)
             {
